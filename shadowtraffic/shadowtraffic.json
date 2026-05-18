@@ -1,0 +1,71 @@
+{
+  "generators": [
+    {
+      "topic": "driver-locations",
+      "key": {
+        "_gen": "uuid"
+      },
+      "value": {
+        "driverId": {
+          "_gen": "string",
+          "expr": "driver-#{regexify '[1-5]'}"
+        },
+        "location": {
+          "_gen": "waypoints",
+          "waypoints": [
+            {
+              "coordinates": [
+                37.3352,
+                -121.8810
+              ]
+            },
+            {
+              "coordinates": [
+                37.3325,
+                -121.8900
+              ]
+            },
+            {
+              "coordinates": [
+                37.3295,
+                -121.9020
+              ]
+            },
+            {
+              "coordinates": [
+                37.3200,
+                -121.9480
+              ]
+            },
+            {
+              "coordinates": [
+                37.3000,
+                -121.9500
+              ]
+            }
+          ],
+          "speed": 500,
+          "scale": 0.00001,
+          "unit": "degrees"
+        },
+        "timestamp": {
+          "_gen": "now"
+        }
+      }
+    }
+  ],
+  "globalConfigs": {
+    "throughput": 10,
+    "maxEvents": 1000
+  },
+  "connections": {
+    "localKafka": {
+      "kind": "kafka",
+      "producerConfigs": {
+        "bootstrap.servers": "host.docker.internal:29092",
+        "key.serializer": "io.shadowtraffic.kafka.serdes.JsonSerializer",
+        "value.serializer": "io.shadowtraffic.kafka.serdes.JsonSerializer"
+      }
+    }
+  }
+}
