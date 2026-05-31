@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import DeliveryMap from './components/DeliveryMap';
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
+
 export default function Home() {
   const [order, setOrder] = useState<{ order_id: string; assigned_driver: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -10,7 +12,10 @@ export default function Home() {
   const startOrder = async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:8000/api/orders', { method: 'POST' });
+      const res = await fetch(`${API_BASE_URL}/api/orders`, { method: 'POST' });
+      if (!res.ok) {
+        throw new Error(`Order request failed with ${res.status}`);
+      }
       const data = await res.json();
       setOrder(data);
     } catch (err) {
@@ -51,7 +56,7 @@ export default function Home() {
               </div>
             </div>
             
-            <DeliveryMap orderId={order.order_id} />
+            <DeliveryMap key={order.order_id} orderId={order.order_id} apiBaseUrl={API_BASE_URL} />
           </div>
         )}
       </div>

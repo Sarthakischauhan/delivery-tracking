@@ -8,6 +8,8 @@ const MapContainer = dynamic(() => import('react-leaflet').then(m => m.MapContai
 const TileLayer = dynamic(() => import('react-leaflet').then(m => m.TileLayer), { ssr: false });
 const Marker = dynamic(() => import('react-leaflet').then(m => m.Marker), { ssr: false });
 const Popup = dynamic(() => import('react-leaflet').then(m => m.Popup), { ssr: false });
+const Polyline = dynamic(() => import('react-leaflet').then(m => m.Polyline), { ssr: false });
+const CircleMarker = dynamic(() => import('react-leaflet').then(m => m.CircleMarker), { ssr: false });
 
 interface Location {
   lat: number;
@@ -16,14 +18,16 @@ interface Location {
 
 interface DeliveryMapProps {
   orderId: string;
+  apiBaseUrl: string;
 }
 
-export default function DeliveryMap({ orderId }: DeliveryMapProps) {
+export default function DeliveryMap({ orderId, apiBaseUrl }: DeliveryMapProps) {
   const [position, setPosition] = useState<Location | null>(null);
+  const [path, setPath] = useState<Location[]>([]);
 
   useEffect(() => {
     import('leaflet').then((L) => {
-      delete (L.Icon.Default.prototype as any)._getIconUrl;
+      delete (L.Icon.Default.prototype as { _getIconUrl?: unknown })._getIconUrl;
       L.Icon.Default.mergeOptions({
         iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
         iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
@@ -31,17 +35,42 @@ export default function DeliveryMap({ orderId }: DeliveryMapProps) {
       });
     });
 
-    const eventSource = new EventSource(`http://localhost:8000/api/stream/${orderId}`);
+    const eventSource = new EventSource(`${apiBaseUrl}/api/stream/${orderId}`);
 
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.location) {
-        setPosition({ lat: data.location.latitude, lon: data.location.longitude });
+        const nextPosition = {
+          lat: data.location.latitude,
+          lon: data.location.longitude,
+        };
+
+        if (typeof nextPosition.lat !== 'number' || typeof nextPosition.lon !== 'number') {
+          return;
+        }
+
+        setPosition(nextPosition);
+        setPath((currentPath) => {
+          const lastPosition = currentPath[currentPath.length - 1];
+          if (
+            lastPosition &&
+            lastPosition.lat === nextPosition.lat &&
+            lastPosition.lon === nextPosition.lon
+          ) {
+            return currentPath;
+          }
+
+          return [...currentPath, nextPosition].slice(-500);
+        });
       }
     };
 
+    eventSource.addEventListener('complete', () => {
+      eventSource.close();
+    });
+
     return () => eventSource.close();
-  }, [orderId]);
+  }, [apiBaseUrl, orderId]);
 
   return (
     <div className="h-[500px] w-full shadow-inner rounded-xl overflow-hidden border border-slate-200 mt-6">
@@ -50,6 +79,33 @@ export default function DeliveryMap({ orderId }: DeliveryMapProps) {
           url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
           attribution='&copy; <a href="https://carto.com/">carto.com</a>'
         />
+        {path.length > 1 && (
+          <>
+            <Polyline
+              positions={path.map(point => [point.lat, point.lon])}
+              pathOptions={{
+                color: '#f97316',
+                weight: 6,
+                opacity: 0.95,
+                lineCap: 'round',
+                lineJoin: 'round',
+              }}
+            />
+            {path.slice(0, -1).map((point, index) => (
+              <CircleMarker
+                key={`${point.lat}-${point.lon}-${index}`}
+                center={[point.lat, point.lon]}
+                radius={3}
+                pathOptions={{
+                  color: '#fff7ed',
+                  fillColor: '#f97316',
+                  fillOpacity: 0.9,
+                  weight: 1,
+                }}
+              />
+            ))}
+          </>
+        )}
         {position && (
           <Marker position={[position.lat, position.lon]}>
             <Popup>
