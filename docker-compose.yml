@@ -1,0 +1,69 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_PATH: /data/delivery.db
+      REDIS_URL: redis://redis:6379/0
+      CORS_ORIGINS: http://localhost:5000,http://127.0.0.1:5000
+    volumes:
+      - delivery-data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  tracking-relay:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["python", "tracking_relay.py"]
+    environment:
+      DATABASE_PATH: /data/delivery.db
+      KAFKA_BOOTSTRAP_SERVERS: host.docker.internal:29092
+      KAFKA_TOPIC: driver-locations
+      KAFKA_GROUP_ID: tracking-relay
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - delivery-data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  shadowtraffic:
+    image: shadowtraffic/shadowtraffic:latest
+    env_file:
+      - shadowtraffic/.env
+    command: ["--config", "/home/config/shadowtraffic.json"]
+    volumes:
+      - ./shadowtraffic/shadowtraffic.json:/home/config/shadowtraffic.json:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    depends_on:
+      - api
+
+volumes:
+  delivery-data:
